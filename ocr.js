@@ -1,10 +1,11 @@
 /* CETG claim form — reading receipts on the device.
- * Loads the Tesseract OCR engine from this site's own /vendor folder (no third-party requests),
+ * Loads the Tesseract OCR engine from this site's own files (no third-party requests),
  * runs it in a background worker, and hands the words to ReceiptParse.
  */
 (function () {
   'use strict';
-  var VENDOR = 'vendor/tesseract-7.0.0/';
+  var VENDOR = './'; // the reader's files sit beside the page (tesseract.min.js, worker.min.js, the engine builds, eng.traineddata.gz)
+  var READER_VERSION = 'tesseract-7.0.0';
   var worker = null, starting = null, idleTimer = null, chain = Promise.resolve();
   var onProgress = null, scriptLoaded = null;
 
@@ -34,7 +35,7 @@
         langPath: base,
         workerBlobURL: false,
         gzip: true,
-        cachePath: 'cetg-' + VENDOR.replace(/[^a-z0-9.]+/gi, '-'), // the reader keeps its language data in the browser under this name; a new version gets a new name
+        cachePath: 'cetg-' + READER_VERSION, // the reader keeps its language data in the browser under this name; a new version gets a new name
         logger: function (m) {
           if (!onProgress || !m) return;
           var p = typeof m.progress === 'number' ? m.progress : 0;
