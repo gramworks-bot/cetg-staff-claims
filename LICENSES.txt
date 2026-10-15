@@ -1,0 +1,14 @@
+Third-party software bundled with this site
+
+tesseract.js 7.0.0 and tesseract.js-core 7.0.0 (OCR engine) - Apache License 2.0
+  https://github.com/naptha/tesseract.js
+English language data (tessdata, 4.0.0_best_int) - Apache License 2.0
+  https://github.com/tesseract-ocr/tessdata
+pdf-lib 1.17.1 (PDF creation) - MIT License
+  https://github.com/Hopding/pdf-lib
+IBM Plex Sans and IBM Plex Mono (fonts) - SIL Open Font License 1.1
+  https://github.com/IBM/plex
+Caveat (font used for typed signatures) - SIL Open Font License 1.1
+  https://github.com/googlefonts/caveat
+Icon shapes adapted from Feather - MIT License
+  https://feathericons.com
