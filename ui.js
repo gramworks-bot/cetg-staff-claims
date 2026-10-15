@@ -501,7 +501,7 @@
   var pdfLibP = null;
   function needPdfLib() {
     if (window.PDFLib) return Promise.resolve();
-    if (!pdfLibP) pdfLibP = loadScript('vendor/pdf-lib-1.17.1/pdf-lib.min.js').catch(function (e) { pdfLibP = null; throw e; });
+    if (!pdfLibP) pdfLibP = loadScript('pdf-lib.min.js').catch(function (e) { pdfLibP = null; throw e; });
     return pdfLibP;
   }
   function field(label, input, o) {
