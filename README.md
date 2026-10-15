@@ -11,4 +11,4 @@ A staff claim form that runs entirely in the browser, on each person's own devic
 
 This repository holds the static site only. There is no server and no database: nothing in it is anyone's claim data.
 
-Third-party components are listed in `vendor/LICENSES.txt`.
+Every file sits beside `index.html` on purpose, so an update is a plain drag-and-drop upload of the files with no folders to get wrong. Third-party components are listed in `LICENSES.txt`.
