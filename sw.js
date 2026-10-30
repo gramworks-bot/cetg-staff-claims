@@ -7,8 +7,8 @@
  * This file is written by tools/build.sh from tools/sw.template.js. */
 /* global self, caches, WebAssembly */
 'use strict';
-var CACHE = 'cetg-claims-1.4.0-353394147a3a';
-var VERSION = '1.4.0';
+var CACHE = 'cetg-claims-1.4.1-793221541281';
+var VERSION = '1.4.1';
 var FILES = [
   "LICENSES.txt",
   "app.js",

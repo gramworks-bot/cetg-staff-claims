@@ -4,7 +4,7 @@
   'use strict';
   var h = U.h, icon = U.icon, toast = UI.toast, field = UI.field, clean = ClaimPDF.clean, MAX = ClaimPDF.MAX;
 
-  var VERSION = '1.4.0';
+  var VERSION = '1.4.1';
   var TYPES = [['ride', 'Taxi / private hire'], ['parking', 'Parking'], ['transit', 'Public transport'], ['erp', 'ERP / tolls'], ['other', 'Other expense']];
   var TYPE_LABEL = {}; TYPES.forEach(function (t) { TYPE_LABEL[t[0]] = t[1]; });
   var DEFAULT_TEAM = { formTitle: 'CET Global Staff Reimbursement Claim Form', approverName: 'Thomas Yeo', approverEmail: '', financeEmail: '' };
@@ -2677,6 +2677,7 @@
     return Store.kvGet(FOLDER_KEY, null).then(function (hnd) {
       if (!isDirHandle(hnd)) return;
       folder.handle = hnd; folder.have = table(); folder.pdfs = table();
+      refreshTips(); // the page was drawn before the folder was known: take back the offer to choose one
       return permissionOf(hnd, false).then(function (perm) {
         if (perm !== 'granted') { folder.state = 'ask'; refreshBanners(); return; }
         return useFolder(hnd).then(folderPeek);
