@@ -7,8 +7,8 @@
  * This file is written by tools/build.sh from tools/sw.template.js. */
 /* global self, caches, WebAssembly */
 'use strict';
-var CACHE = 'cetg-claims-1.3.0-924601a5db2c';
-var VERSION = '1.3.0';
+var CACHE = 'cetg-claims-1.4.0-353394147a3a';
+var VERSION = '1.4.0';
 var FILES = [
   "LICENSES.txt",
   "app.js",
@@ -29,10 +29,17 @@ var FILES = [
   "icon-maskable-512.png",
   "icon.svg",
   "index.html",
+  "jbig2.wasm",
   "manifest.webmanifest",
   "ocr.js",
+  "openjpeg.wasm",
   "parse.js",
   "pdf-lib.min.js",
+  "pdfjs-load.js",
+  "pdfjs.min.js",
+  "pdfjs.worker.min.js",
+  "pdfread.js",
+  "qcms_bg.wasm",
   "store.js",
   "styles.css",
   "tesseract.min.js",

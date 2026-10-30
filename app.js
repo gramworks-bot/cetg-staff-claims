@@ -4,7 +4,7 @@
   'use strict';
   var h = U.h, icon = U.icon, toast = UI.toast, field = UI.field, clean = ClaimPDF.clean, MAX = ClaimPDF.MAX;
 
-  var VERSION = '1.3.0';
+  var VERSION = '1.4.0';
   var TYPES = [['ride', 'Taxi / private hire'], ['parking', 'Parking'], ['transit', 'Public transport'], ['erp', 'ERP / tolls'], ['other', 'Other expense']];
   var TYPE_LABEL = {}; TYPES.forEach(function (t) { TYPE_LABEL[t[0]] = t[1]; });
   var DEFAULT_TEAM = { formTitle: 'CET Global Staff Reimbursement Claim Form', approverName: 'Thomas Yeo', approverEmail: '', financeEmail: '' };
@@ -343,17 +343,26 @@
 
   var batch = null;    // collects what happened while a batch of receipts is read, for one summary message
   var attachTo = null; // a typed line waiting for its receipt from the "attach" file picker
+  var PDF_PAGES = 20;  // a PDF with more pages than this is not a receipt
   function addFiles(fileList, o) {
     o = o || {};
     var files = Array.prototype.slice.call(fileList || []);
     var pdfs = files.filter(isPdfFile), imgs = files.filter(function (f) { return !isPdfFile(f) && isImageFile(f); });
-    if (pdfs.length && window.App.openPdfs) window.App.openPdfs(pdfs);
-    if (!imgs.length) { if (!pdfs.length && files.length) toast('Add receipt screenshots or photos (PNG or JPG).', { bad: true }); return Promise.resolve(); }
-    if (S.tab !== 'claims') { toast('Receipt images go under “My claims”.'); return Promise.resolve(); }
+    if (!imgs.length && !pdfs.length) { if (files.length) toast('Add receipts as screenshots, photos or PDFs (PNG, JPG or PDF).', { bad: true }); return Promise.resolve(); }
+    if (S.tab !== 'claims') {
+      // under "Approver" a PDF is a claim to open; receipts belong under "My claims"
+      if (pdfs.length && window.App.openPdfs) window.App.openPdfs(pdfs);
+      if (imgs.length) toast('Receipt images go under “My claims”.');
+      return Promise.resolve();
+    }
     if (S.broken === 'wiped' || S.broken === 'replaced') { toast('Reload the page before adding receipts.', { bad: true }); return Promise.resolve(); }
-    var shown = S.month, filed = {}, added = 0, p = Promise.resolve();
-    imgs.forEach(function (f) { p = p.then(function () { return addReceipt(f, o).then(function (line) { if (line) { added++; filed[line.month] = true; } }); }); });
+    var shown = S.month, filed = {}, added = 0, claims = [], p = Promise.resolve();
+    function count(line) { if (line) { added++; filed[line.month] = true; } }
+    imgs.forEach(function (f) { p = p.then(function () { return addReceipt(f, o).then(count); }); });
+    pdfs.forEach(function (f) { p = p.then(function () { return addPdf(f, o, claims).then(function (lines) { lines.forEach(count); }); }); });
     return p.then(function () {
+      // a claim PDF made by this form (an approved month coming back, say) goes its own way
+      if (claims.length && window.App.openPdfs) window.App.openPdfs(claims);
       if (!added) return;
       keepData();
       // A new receipt never goes into a signed month. Say where it went, and show it.
@@ -366,14 +375,60 @@
     });
   }
 
+  // A PDF receipt: every page becomes a receipt image (drawn on this device), and a page that carries
+  // its own text is read from that text rather than by OCR. A claim PDF made by this form is set
+  // aside in `claims` for the approver flow. Resolves to the lines added.
+  function addPdf(file, o, claims) {
+    var label = '“' + (file.name || 'That file') + '”', lines = [];
+    if (!window.PDFRead) return Promise.resolve(lines);
+    return window.PDFRead.open(file).then(function (pdf) {
+      if (pdf.isClaim) { pdf.close(); claims.push(file); return lines; }
+      var n = pdf.pages;
+      if (n > PDF_PAGES) {
+        pdf.close();
+        toast(label + ' has ' + n + ' pages, so it does not look like a receipt. Save the page with the receipt as its own PDF, or add a screenshot of it.', { bad: true, ms: 10000 });
+        return lines;
+      }
+      var p = Promise.resolve();
+      for (var i = 1; i <= n; i++) (function (i) {
+        p = p.then(function () {
+          return addReceipt(file, { attachTo: i === 1 ? o.attachTo : null, sample: o.sample, open: function () { return pdf.render(i, 1800); }, page: i, pages: n })
+            .then(function (line) { if (line) lines.push(line); });
+        });
+      })(i);
+      return p.then(function () {
+        pdf.close();
+        if (n > 1 && lines.length > 1) toast(label + ' has ' + n + ' pages, so each page is its own receipt here. Remove any page that is not a receipt.', { ms: 9000 });
+        return lines;
+      }, function (e) { pdf.close(); throw e; });
+    }).catch(function (e) {
+      var k = e && e.kind;
+      toast(k === 'locked' ? label + ' is locked with a password. Save a copy without the password, or add a screenshot of it.'
+        : k === 'toolarge' ? label + ' is too large to be a receipt (over 40 MB).'
+        : k === 'unsupported' ? 'This browser cannot read PDF receipts. Add a screenshot of the receipt instead.'
+        : k === 'file' ? 'PDF receipts are read only when the form is opened from its web link or as the installed app, not as a file on this computer. Add a screenshot of the receipt instead.'
+        : k === 'notpdf' ? label + ' could not be opened as a PDF.'
+        : label + ' could not be opened. Check your connection and try again, or add a screenshot of it.', { bad: true, ms: 10000 });
+      if (window.console && k !== 'locked' && k !== 'notpdf') console.warn(e);
+      return lines;
+    });
+  }
+
   // Resolves to the line that now carries the receipt, or null when nothing was added.
+  // o.open: how to get the picture when it is not simply the file (a PDF page: resolves {img, w, h,
+  // done, text}, where text() resolves the page's own words, or null when it has none to speak of).
   function addReceipt(file, o) {
-    var src = null, target = (o && o.attachTo) || null, label = '“' + (file.name || 'That file') + '”';
-    return loadImage(file).then(function (s) {
+    o = o || {};
+    var src = null, target = o.attachTo || null, textP = null;
+    var label = '“' + (file.name || 'That file') + '”' + (o.pages > 1 ? ' (page ' + o.page + ')' : '');
+    return (o.open ? o.open() : loadImage(file)).then(function (s) {
       src = s;
       return toJpeg(s);
     }).then(function (jpg) {
-      src.done(); src = null;
+      var page = src; src = null;
+      textP = page.text ? page.text().then(null, function () { return null; }) : Promise.resolve(null);
+      page.done();
+      if (page.release) textP.then(page.release, page.release);
       return U.sha256(jpg.bytes).then(function (hash) {
         var dup = S.lines.filter(function (l) { return l.receiptHash === hash && l !== target; })[0];
         if (dup) {
@@ -398,7 +453,7 @@
           line.ocr = { state: 'pending' };
           return saveLine(line, true).then(function () {
             if (S.tab === 'claims') renderClaims();
-            queueOcr(line, { fresh: true });
+            textP.then(function (shape) { readReceipt(line, shape); });
             return line;
           });
         }, function (e) {
@@ -407,11 +462,28 @@
           return null;
         });
       });
-    }).catch(function () {
-      if (src) src.done();
+    }).catch(function (e) {
+      if (src) { src.done(); if (src.release) src.release(); }
+      if (o.open) { toast(label + ' could not be drawn. Add a screenshot of that page instead.', { bad: true }); if (window.console) console.warn(e); return null; }
       var heic = /\.(heic|heif)$/i.test(file.name || '');
-      toast(label + ' could not be opened.' + (heic ? ' Take a screenshot of the photo and add the screenshot instead.' : ' Use a PNG or JPG image.'), { bad: true });
+      toast(label + ' could not be opened.' + (heic ? ' Take a screenshot of the photo and add the screenshot instead.' : ' Use a PNG or JPG image, or a PDF.'), { bad: true });
       return null;
+    });
+  }
+
+  // Read a receipt that was just stored: from the words its PDF page carries, when it has them and
+  // they say enough (an amount or a date); otherwise by OCR, like a screenshot.
+  function readReceipt(line, shape) {
+    var res = null;
+    if (shape) { try { res = window.ReceiptParse.parseReceipt(shape, U.todayIso()); } catch (e) { res = null; } }
+    if (!res || (res.amount == null && !res.date)) return queueOcr(line, { fresh: true });
+    if (!batch) batch = { moved: {}, kept: 0, n: 0, pending: 0 };
+    var mine = batch;
+    mine.pending++;
+    var p = S.lines.indexOf(line) === -1 ? Promise.resolve() : applyOcr(line, res);
+    return p.catch(function (e) { if (window.console) console.warn(e); }).then(function () {
+      mine.pending--;
+      if (mine.pending <= 0 && batch === mine) { batch = null; batchDone(mine); }
     });
   }
 
@@ -803,11 +875,11 @@
         h('button', { type: 'button', class: 'btn primary' + (empty ? ' big' : ''), id: 'btn-add', onclick: function () { document.getElementById('pick-images').click(); } }, icon('upload'), 'Add receipts'),
         touch ? h('button', { type: 'button', class: 'btn', onclick: function () { document.getElementById('pick-camera').click(); } }, icon('camera'), 'Take photo') : null,
         h('button', { type: 'button', class: 'btn', id: 'btn-manual', onclick: addManualLine }, icon('plus'), 'Item without receipt')),
-      h('p', { text: touch ? 'Pick screenshots or photos of your receipts. The amount and date are read on this device, so nothing is uploaded.'
-        : 'Choose screenshots, drag them onto this page, or paste one with ' + pasteKey + '. The amount and date are read on this device, so nothing is uploaded.' }));
+      h('p', { text: touch ? 'Pick screenshots, photos or PDF receipts. The amount and date are read on this device, so nothing is uploaded.'
+        : 'Choose screenshots or PDF receipts, drag them onto this page, or paste one with ' + pasteKey + '. The amount and date are read on this device, so nothing is uploaded.' }));
     if (empty) {
       z.appendChild(h('ol', { class: 'steps' },
-        h('li', null, h('div', null, h('b', { text: 'Add each receipt' }), 'Grab, taxi, parking, MRT or any other expense. The amount and date are filled in for you to check.')),
+        h('li', null, h('div', null, h('b', { text: 'Add each receipt' }), 'Grab, taxi, parking, MRT or any other expense, as a screenshot, photo or PDF. The amount and date are filled in for you to check.')),
         h('li', null, h('div', null, h('b', { text: 'Add the trip details' }), 'Type what the trip was for, where it started and ended, then tick that the amount is right.')),
         h('li', null, h('div', null, h('b', { text: 'Sign at month end' }), 'The month is totalled for you. Sign on screen and send the PDF to ' + first + '.'))));
       z.appendChild(h('p', null, 'New here? ', h('button', { type: 'button', class: 'link', id: 'btn-sample', text: 'Try it with a sample receipt', onclick: function () {
@@ -2855,7 +2927,7 @@
     document.addEventListener('paste', function (e) {
       if (UI.anyModal()) return;
       var items = (e.clipboardData && e.clipboardData.files) ? Array.prototype.slice.call(e.clipboardData.files) : [];
-      var imgs = items.filter(isImageFile);
+      var imgs = items.filter(function (f) { return isImageFile(f) || isPdfFile(f); });
       if (!imgs.length) return;
       e.preventDefault();
       addFiles(imgs);

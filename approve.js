@@ -71,7 +71,7 @@
       }).then(function (o) {
         if (o.skip) return;
         if (!o.res) {
-          if (S.tab === 'claims') toast(label + ' is not a claim from this form. To add a PDF receipt, take a screenshot of it and add the screenshot.', { bad: true, ms: 10000 });
+          if (S.tab === 'claims') toast(label + ' is not a claim from this form. To add it as a receipt, use “Add receipts”.', { bad: true, ms: 10000 });
           else toast(label + ' is not a signed claim from this form, or another app re-saved it. Ask for the original PDF.', { bad: true, ms: 9000 });
           return;
         }

@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>CETG Transport &amp; Expense Claim Form</title>
-<meta name="description" content="Add receipt screenshots, check the amounts, sign the month's claim and send it for approval.">
+<meta name="description" content="Add receipt screenshots or PDF receipts, check the amounts, sign the month's claim and send it for approval.">
 <meta name="robots" content="noindex, nofollow">
 <meta name="referrer" content="no-referrer">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; font-src 'self'; connect-src 'self' blob: data:; object-src 'none'; base-uri 'self'; form-action 'none'">
@@ -77,9 +77,9 @@
 <div id="sr" class="sr-only" role="status" aria-live="polite"></div>
 <div id="drop-veil" hidden>Drop to add</div>
 
-<input type="file" id="pick-images" accept="image/*" multiple hidden>
+<input type="file" id="pick-images" accept="image/*,application/pdf,.pdf" multiple hidden>
 <input type="file" id="pick-camera" accept="image/*" capture="environment" hidden>
-<input type="file" id="pick-attach" accept="image/*" hidden>
+<input type="file" id="pick-attach" accept="image/*,application/pdf,.pdf" hidden>
 <input type="file" id="pick-pdf" accept="application/pdf,.pdf" multiple hidden>
 <input type="file" id="pick-backup" accept="application/json,.json" hidden>
 <input type="file" id="pick-bringback" accept="application/pdf,.pdf" multiple hidden>
@@ -90,6 +90,7 @@
 <script defer src="parse.js"></script>
 <script defer src="store.js"></script>
 <script defer src="ocr.js"></script>
+<script defer src="pdfread.js"></script>
 <script defer src="claimpdf.js"></script>
 <script defer src="ui.js"></script>
 <script defer src="app.js"></script>

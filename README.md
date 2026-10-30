@@ -2,7 +2,7 @@
 
 A staff claim form that runs entirely in the browser, on each person's own device.
 
-- Add receipt screenshots or photos; the amount and date are read on the device (Tesseract OCR), nothing is uploaded.
+- Add receipt screenshots, photos or PDF receipts; the amount and date are read on the device (Tesseract OCR, or the PDF's own text via pdf.js), nothing is uploaded.
 - Key in the trip details, check each amount, and the month is totalled automatically.
 - Sign on screen; the signed claim is a PDF (with the receipts inside) that is emailed to the reporting officer.
 - The reporting officer opens the PDF in the same form under **Approver**, checks each item beside its receipt, and signs the approved PDF back.

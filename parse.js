@@ -11,7 +11,9 @@
   var MONTHS = { jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12 };
   var MON = '(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)';
   var DOW = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
-  var CUR = 'rm|myr|usd|us\\$|eur|gbp|aud|idr|thb|hkd|jpy|cny|rmb';
+  // other currencies, by code or sign (euro, pound, yen, rupee, won, baht, peso, dong)
+  var CUR = 'rm|myr|usd|us\\$|eur|gbp|aud|a\\$|idr|thb|hkd|hk\\$|jpy|cny|rmb|twd|nt\\$|php|inr|krw|vnd|nzd|cad|chf|€|£|¥|₹|₩|฿|₱|₫';
+  var CUR_CODE = { 'US$': 'USD', 'A$': 'AUD', 'HK$': 'HKD', 'NT$': 'TWD', '€': 'EUR', '£': 'GBP', '¥': 'JPY', '₹': 'INR', '₩': 'KRW', '฿': 'THB', '₱': 'PHP', '₫': 'VND' }; // the sign forms, as a code the note can name
 
   var RE_NEG = /\b(gst|tax|vat|svc|service\s*ch\w*|change|cash|tender\w*|balance|bal|discount|disc|promo\w*|voucher|coupon|rebate|offset|redeem\w*|sub\s*-?\s*total|rounding|deposit|stored\s*value|remaining|points|tip|saved|savings|before|limit|top\s*-?\s*up|refund)\b/;
   var RE_DISC = /\b(discount|disc|promo\w*|voucher|coupon|rebate|offset|redeem\w*|points|saved|savings)\b/;
@@ -24,15 +26,25 @@
   var RE_ROUNDED = /(after\s*rounding|rounded\s*(total|amount)|total\s*\(?\s*rounded)/;
   var RE_TOPUP_AMOUNT = /top\s*-?\s*up\s*(amount|value)/;
   // a row naming how it was paid carries the amount that was actually charged
-  var RE_PAY = /\b(visa|master\s*card|amex|american\s*express|nets|paynow|paylah|grab\s*pay|go\s*pay|apple\s*pay|google\s*pay|credit\s*card|debit\s*card|charged\s*to|paid\s*(by|with|via|using)|card\s*ending)\b/;
+  var RE_PAY = /\b(visa|master\s*card|amex|american\s*express|nets|paynow|paylah|grab\s*pay|go\s*pay|apple\s*pay|google\s*pay|credit\s*card|debit\s*card|charged|paid\s*(by|with|via|using)|card\s*ending)\b/;
   var RE_MEDIUM = /\b(fare|fees?|charges?|surcharges?|amount|paid|payment|price|cost|parking)\b/;
   // "Total hours: 5.75", "Distance 12.50": a number that follows a unit word is not money
   var RE_UNIT_BEFORE = /\b(hours?|hrs?|duration|distance|mileage|odometer|km|mins?|minutes|qty|quantity|items?|units?|litres?|liters?|kwh|pax|trips?|rides?)\s*[:=]?\s*\(?\s*$/;
   var RE_UNIT_AFTER = /^\s?(?:%|(?:km|kg|kwh|l|ltr|litres?|liters?|mins?|hrs?|hours?|pts|x|am|pm|a\.m|p\.m)\b)/i;
   var RE_SGD_BEFORE = /(s\$+|\$+|sgd|s5\$?|5\$)\s*\(?\s*$/i;
-  var RE_CUR_WORDS = /\b(sgd|usd|myr|rm|eur|gbp|aud)\b|s?\$/g;
-  var RE_FOREIGN_BEFORE = new RegExp('\\b(' + CUR + ')\\b', 'i');
-  var RE_FOREIGN_AFTER = new RegExp('^\\s?(' + CUR + ')\\b', 'i');
+  var RE_SGD_EXPLICIT = /(^|[^a-z])(s\$+|sgd|s5\$?|5\$)\s*\(?\s*$/i; // written as Singapore dollars, not just "$"
+  var RE_CUR_WORDS = new RegExp('(^|[^a-z])(sgd|' + CUR + ')(?![a-z])|s?\\$', 'gi');
+  // a currency named right in front of the figure ("RM 85.00", "US$20.00", "(USD) 20.00") or right after it ("85.00 MYR")
+  var RE_FOREIGN_BEFORE = new RegExp('(^|[^a-z$])(' + CUR + ')(?![a-z])[^a-z0-9]{0,4}$', 'i');
+  var RE_FOREIGN_AFTER = new RegExp('^\\s?(' + CUR + ')(?![a-z])', 'i');
+  var RE_CUR_ANY = new RegExp('(^|[^a-z$])(' + CUR + ')(?![a-z])', 'i');
+  // a stated exchange rate: "1 USD = 1.3289 SGD", "USD 1 = SGD 1.33" (a lone "=" is not kept in the
+  // rows, so it is optional here), or the words "exchange rate", "converted"
+  var RE_FX_ONE = new RegExp('(^|[^a-z0-9.,])1\\s*(' + CUR + ')\\s*=?\\s*\\d+(?:[.,]\\d+)?\\s*(?:sgd|s\\$)|(^|[^a-z0-9.,$])(' + CUR + ')\\s*1(?:\\.0+)?\\s*=?\\s*(?:sgd|s\\$)\\s*\\d', 'i');
+  var RE_FX_WORDS = /\b(exchange|conversion|fx)\s*rate|\bconverted\b/;
+  var RE_CHARGED = /\b(charged|billed|debited|deducted|paid|payment|converted|total|amount)\b/;
+  var RE_APPROX = /\b(approx\w*|estimat\w*|about|around|roughly|equivalent|indicative|reference)\b|~|≈/;
+  function curCode(m) { var c = String(m || '').toUpperCase(); return CUR_CODE[c] || c; }
 
   function pad2(n) { return (n < 10 ? '0' : '') + n; }
   function iso(y, m, d) { return y + '-' + pad2(m) + '-' + pad2(d); }
@@ -57,7 +69,7 @@
     var clean = [];
     (lines || []).forEach(function (l) {
       var words = (l.words || []).filter(function (w) {
-        return w && w.text && w.bbox && (w.conf == null || w.conf >= 25) && /[A-Za-z0-9$]/.test(w.text);
+        return w && w.text && w.bbox && (w.conf == null || w.conf >= 25) && /[A-Za-z0-9$\u20ac\u00a3\u00a5\u20b9\u20a9\u0e3f\u20b1\u20ab]/.test(w.text); // a currency sign on its own is kept
       });
       if (!words.length) return;
       var y0 = Infinity, y1 = -Infinity, x0 = Infinity, x1 = -Infinity;
@@ -157,12 +169,10 @@
           var above = rows[ri - 1];
           if (above && !found.some(function (f) { return f.row === ri - 1; }) && letters(above.lower) >= 3) { ctx = above.lower + ' ' + ctx; fromAbove = true; }
         }
-        var sgd = RE_SGD_BEFORE.test(before);
-        var foreign = '';
-        if (!sgd) {
-          var fb = before.slice(-8).match(RE_FOREIGN_BEFORE), fa = after.match(RE_FOREIGN_AFTER);
-          foreign = ((fb && fb[1]) || (fa && fa[1]) || '').toUpperCase();
-        }
+        // the currency: named in front of the figure (which "US$" is, not an "S$"), else "$"/"S$" means Singapore dollars, else named after it
+        var fb = before.slice(-12).match(RE_FOREIGN_BEFORE), foreign = fb ? curCode(fb[2]) : '';
+        var sgd = !foreign && RE_SGD_BEFORE.test(before), explicit = sgd && RE_SGD_EXPLICIT.test(before);
+        if (!foreign && !explicit) { var fa = after.match(RE_FOREIGN_AFTER); if (fa) { foreign = curCode(fa[1]); sgd = false; } } // "$14.99 USD"
         var label = 'none', score = 0, fin = false, disc = false, pay = false, cash = false, neg = RE_NEG.exec(ctx);
         if (RE_ROUNDED.test(ctx) && !aside) { label = 'total'; score = 12; fin = true; }
         else if (aside || (neg && !(RE_INCL.test(ctx) && RE_STRONG.test(ctx)) && !RE_TOPUP_AMOUNT.test(ctx))) {
@@ -180,7 +190,7 @@
         // remember the reading without that first digit. A complete "S$" in front means nothing was misread.
         var alt = 0, d0 = intPart.charAt(0), rest = intPart.length > 1 ? parseInt(intPart.slice(1), 10) * 100 + parseInt(m[2], 10) : 0;
         if (rest > 0 && ((/[Ss]/.test(prev) && d0 === '5') || (prev === '$' && !/[Ss]/.test(prev2) && d0 === '8'))) alt = rest;
-        found.push({ cents: cents, label: label, score: score, row: ri, box: sb.box, conf: sb.conf, foreign: foreign, fin: fin, disc: disc, pay: pay, cash: cash, alt: alt });
+        found.push({ cents: cents, label: label, score: score, row: ri, box: sb.box, conf: sb.conf, foreign: foreign, explicit: explicit, fin: fin, disc: disc, pay: pay, cash: cash, alt: alt });
         prevEnd = e; first = false;
       }
     });
@@ -201,6 +211,7 @@
       var score = best.score + Math.min(4, (occ.length - 1) * 2);
       if (v === maxPositive && best.label !== 'other') score += 2;
       return { cents: v, score: score, label: best.label, box: best.box, row: best.row, count: occ.length, foreign: best.foreign, conf: best.conf,
+        explicit: occ.some(function (o) { return o.explicit; }), bare: occ.every(function (o) { return !o.explicit && !o.foreign; }),
         fin: occ.some(function (o) { return o.fin; }), pay: occ.some(function (o) { return o.pay; }), disc: occ.every(function (o) { return o.disc; }), cash: occ.some(function (o) { return o.cash; }),
         firstRow: Math.min.apply(null, occ.map(function (o) { return o.row; })), lastRow: Math.max.apply(null, occ.map(function (o) { return o.row; })) };
     });
@@ -268,6 +279,29 @@
         out.unsure = true; // a total, then a discount, and nothing after it: the amount paid is not printed
       }
     }
+    // A receipt in another currency that states an exchange rate ("Charged S$26.58 using 1 USD = 1.3289
+    // SGD"): its figures written with a bare "$" are in that other currency, and a figure written as S$
+    // on a line saying it was charged or paid is the amount paid. An S$ figure that is only approximate
+    // ("approx. S$160") is not: the card is charged in the other currency, so the person types the S$
+    // amount from their statement. Without a stated rate nothing changes: a Singapore bill that shows
+    // one rate in S$ and mentions a currency in passing is left alone.
+    var all = rows.map(function (r) { return r.lower; }).join('\n'), fx = all.match(RE_FX_ONE), cur = '';
+    if (fx) cur = curCode(fx[2] || fx[4]);
+    else if (RE_FX_WORDS.test(all)) { var cm = all.match(RE_CUR_ANY); cur = cm ? curCode(cm[2]) : ''; }
+    if (cur) {
+      var bare = out.filter(function (c) { return c.bare; });
+      bare.forEach(function (c) { if (!c.foreign) c.foreign = cur; });
+      var marked = out.filter(function (c) {
+        var t = rows[c.row] ? rows[c.row].lower : '';
+        return c.explicit && c.label !== 'other' && RE_CHARGED.test(t) && !RE_APPROX.test(t);
+      });
+      if (marked.length && out.some(function (c) { return c.foreign; })) {
+        marked.sort(function (a, b) { return b.score - a.score || b.lastRow - a.lastRow; });
+        var sg = marked[0], above = Math.max.apply(null, out.map(function (c) { return c === sg ? -Infinity : c.score; }));
+        if (sg.score < above + 3) sg.score = above + 3;
+        sg.label = 'total'; sg.fin = true;
+      }
+    }
     var unsure = !!out.unsure;
     out.sort(function (a, b) { return b.score - a.score || (b.fin ? 1 : 0) - (a.fin ? 1 : 0) || b.lastRow - a.lastRow || b.cents - a.cents; });
     out.unsure = unsure;
@@ -332,6 +366,7 @@
           if (yr.length === 2) {
             // "30 Sep, 14:27" (a time), "1 Sep - 30 Sep" (a range), "30 Sep 25 Tampines Ave" (an address), or a year nowhere near now
             if (/^\s?[:.]\d/.test(rest) || /^\s?(am|pm)\b/i.test(rest) || monthAhead.test(rest)) notYear = true;
+            else if (/^\s?,?\s?20\d{2}(?!\d)/.test(rest)) notYear = true; // "Oct 24-Nov 24, 2026": the 24 is a day, the year follows
             else if (/^\s?[A-Za-z]/.test(rest) && !/^\s?(mon|tue|wed|thu|fri|sat|sun)/i.test(rest)) notYear = true;
             else if (thisYear && (2000 + y1 < thisYear - 6 || 2000 + y1 > thisYear + 1)) notYear = true;
           }
